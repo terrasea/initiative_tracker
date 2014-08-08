@@ -1,0 +1,41 @@
+<link rel="import" href="../../packages/polymer/polymer.html">
+
+<link rel="import" href="../../packages/core_elements/core_icons.html">
+<link rel="import" href="../../packages/core_elements/core_menu.html">
+<link rel="import" href="../../packages/paper_elements/paper_item.html">
+<link rel="import" href="../../packages/paper_elements/paper_input.html">
+<link rel="import" href="../../packages/paper_elements/paper_button.html">
+
+<polymer-element name="initiative-list">
+  <template>
+    <template if="{{ start == true }}">
+      <div>Not had turn</div>
+      <core-menu>
+        <template repeat="{{ init in initiatives | hadTurn('false') }}">
+          <paper-item id="{{ init.name }}" label="{{ init.name }}: {{ init.initiative }}" on-tap="{{ finish }}"></paper-item>
+        </template>
+      </core-menu>
+      <div>Had turn</div>
+      <core-menu>
+        <template repeat="{{ init in initiatives | hadTurn('true') }}">
+          <paper-item id="{{ init.name }}" label="{{ init.name }}: {{ init.initiative }}" on-tap="{{ notFinished }}"></paper-item>
+        </template>
+      </core-menu>
+    </template>
+    <template if="{{ start == false }}">
+      <paper-input id="name" label="Name" floatingLabel></paper-input><br>
+      <paper-button label="Add" raisedButton on-tap="{{ addPlayerEvent }}"></paper-button><br>
+      <paper-button label="Start" raisedButton on-tap="{{ go }}"></paper-button><br>
+      <template repeat="{{ player in players }}">
+        <span id="added_{{ player.name }}" style="background-color: lightcoral">{{ player.name }}</span>
+      </template>
+    </template>
+    <template if="{{ start == true }}">
+      <template repeat="{{ player in players }}">
+        <paper-input id="player_{{ player.name }}" label="{{ player.name }}" floatingLabel></paper-input><br>
+      </template>
+      <paper-button label="Set Initiatives" raisedButton on-tap="{{ setInitiatives }}"></paper-button>
+    </template>
+  </template>
+  <script type="application/dart" src="initiative_list.dart"></script>
+</polymer-element>
