@@ -9,22 +9,10 @@
     
     
     
-    
-    
-    
         
     
   </head>
   <body><script src="packages/web_components/platform.js"></script><script src="packages/web_components/dart_support.js"></script>
-
-
-<!-- import core-icon for convenience 
-  TODO(sorvell): we'd rather do this in core-iconset but we can't until
-  crbug.com/373461 is addressed
--->
-
-
-
 
 
 
@@ -314,7 +302,24 @@ html /deep/ [segment], html /deep/ segment {
 </style><script src="packages/polymer/src/js/polymer/polymer.js"></script><script>
 // TODO(sigmund): remove this script tag (dartbug.com/19650). This empty
 // script tag is necessary to work around a bug in Chrome 36.
-</script><script>
+</script>
+
+
+<!-- import core-icon for convenience 
+  TODO(sorvell): we'd rather do this in core-iconset but we can't until
+  crbug.com/373461 is addressed
+-->
+
+
+
+
+
+
+
+
+
+
+<script>
 // This empty script is here to workaround issue
 // https://github.com/dart-lang/core-elements/issues/11
 </script><polymer-element name="core-meta" attributes="list label type" hidden="">
@@ -1953,14 +1958,6 @@ html /deep/ core-menu::shadow ::content > core-item {
 
 
 
-
-
-
-
-
-
-
-
 <polymer-element name="core-input">
 
   <template>
@@ -3485,4 +3482,4 @@ h1, p {
     <initiative-list></initiative-list>
   
 
-<script type="application/dart" src="initiative_tracker.html_bootstrap.dart"></script><script src="packages/browser/dart.js"></script></body></html>
+<script type="application/dart" src="index.html_bootstrap.dart"></script><script src="packages/browser/dart.js"></script></body></html>

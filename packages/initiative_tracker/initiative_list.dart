@@ -45,7 +45,7 @@ class InitiativeList extends PolymerElement with ChangeNotifier  {
 
   addPlayerEvent() {
     var input = ($['name'] as PaperInput);
-    var player = new Player.create($['name'].value);
+    var player = new Player.create($['name'].value.trim());
     addPlayer(player);
     input.value = '';
     input.focus();

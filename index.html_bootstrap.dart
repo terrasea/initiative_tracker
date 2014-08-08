@@ -16,7 +16,7 @@ import 'package:paper_elements/paper_focusable.dart' as i10;
 import 'package:paper_elements/paper_shadow.dart' as i11;
 import 'package:paper_elements/paper_button.dart' as i12;
 import 'package:initiative_tracker/initiative_list.dart' as i13;
-import 'initiative_tracker.html.0.dart' as i14;
+import 'index.html.0.dart' as i14;
 import 'package:smoke/smoke.dart' show Declaration, PROPERTY, METHOD;
 import 'package:smoke/static.dart' show useGeneratedCode, StaticConfiguration;
 import 'package:initiative_tracker/initiative_list.dart' as smoke_0;
