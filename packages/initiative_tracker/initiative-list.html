@@ -2,25 +2,31 @@
 
 <link rel="import" href="../../packages/core_elements/core_icons.html">
 <link rel="import" href="../../packages/core_elements/core_menu.html">
+<link rel="import" href="../../packages/core_elements/core_drag_drop.html">
 <link rel="import" href="../../packages/paper_elements/paper_item.html">
 <link rel="import" href="../../packages/paper_elements/paper_input.html">
 <link rel="import" href="../../packages/paper_elements/paper_button.html">
+<link rel="import" href="../../packages/paper_elements/paper_toast.html">
+
+<link rel="import" href="draggable-item.html">
 
 <polymer-element name="initiative-list">
   <template>
+    <style>
+      paper-item {
+        /*-webkit-user-drag: auto !important;*/
+      }
+      :host {
+        
+      }
+    </style>
+    <core-drag-drop></core-drag-drop>
     <template if="{{ start == true }}">
-      <div>Not had turn</div>
-      <core-menu>
-        <template repeat="{{ init in initiatives | hadTurn('false') }}">
-          <paper-item id="{{ init.name }}" label="{{ init.name }}: {{ init.initiative }}" on-tap="{{ finish }}"></paper-item>
-        </template>
-      </core-menu>
-      <div>Had turn</div>
-      <core-menu>
-        <template repeat="{{ init in initiatives | hadTurn('true') }}">
-          <paper-item id="{{ init.name }}" label="{{ init.name }}: {{ init.initiative }}" on-tap="{{ notFinished }}"></paper-item>
-        </template>
-      </core-menu>
+      <template repeat="{{ init in initiatives }}">
+        <paper-item draggable="true" id="{{ init.name }}" on-trackstart="{{ dragStart }}" on-trackend="{{ dragStop }}" on-track="{{ dragIt }}" _icon="{{ init.icon }}" label="{{ init.name }}: {{ init.initiative }}" on-click="{{ finish }}">
+          <paper-button label="Delay" on-click="{{ delay }}"></paper-button>
+        </paper-item>
+      </template>
     </template>
     <template if="{{ start == false }}">
       <paper-input id="name" label="Name" floatingLabel></paper-input><br>
@@ -30,12 +36,14 @@
         <span id="added_{{ player.name }}" style="background-color: lightcoral">{{ player.name }}</span>
       </template>
     </template>
-    <template if="{{ start == true }}">
+    
+    <template if="{{ start == true && newTurn == true }}">
       <template repeat="{{ player in players }}">
-        <paper-input id="player_{{ player.name }}" label="{{ player.name }}" floatingLabel></paper-input><br>
+        <paper-input type="number" id="player_{{ player.name }}" label="{{ player.name }}" floatingLabel></paper-input><br>
       </template>
       <paper-button label="Set Initiatives" raisedButton on-tap="{{ setInitiatives }}"></paper-button>
     </template>
+    <paper-toast id="missed-turn" text="Have you missed someones turn?"></paper-toast>
   </template>
   <script type="application/dart" src="initiative_list.dart"></script>
 </polymer-element>

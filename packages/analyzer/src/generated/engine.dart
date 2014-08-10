@@ -1780,7 +1780,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
 
   @override
   void set analysisOptions(AnalysisOptions options) {
-    bool needsRecompute = this._options.analyzeAngular != options.analyzeAngular || this._options.analyzeFunctionBodies != options.analyzeFunctionBodies || this._options.generateSdkErrors != options.generateSdkErrors || this._options.enableDeferredLoading != options.enableDeferredLoading || this._options.dart2jsHint != options.dart2jsHint || (this._options.hint && !options.hint) || this._options.preserveComments != options.preserveComments;
+    bool needsRecompute = this._options.analyzeAngular != options.analyzeAngular || this._options.analyzeFunctionBodies != options.analyzeFunctionBodies || this._options.generateSdkErrors != options.generateSdkErrors || this._options.enableAsync != options.enableAsync || this._options.enableDeferredLoading != options.enableDeferredLoading || this._options.enableEnum != options.enableEnum || this._options.dart2jsHint != options.dart2jsHint || (this._options.hint && !options.hint) || this._options.preserveComments != options.preserveComments;
     int cacheSize = options.cacheSize;
     if (this._options.cacheSize != cacheSize) {
       this._options.cacheSize = cacheSize;
@@ -1801,7 +1801,9 @@ class AnalysisContextImpl implements InternalAnalysisContext {
     this._options.analyzeAngular = options.analyzeAngular;
     this._options.analyzeFunctionBodies = options.analyzeFunctionBodies;
     this._options.generateSdkErrors = options.generateSdkErrors;
+    this._options.enableAsync = options.enableAsync;
     this._options.enableDeferredLoading = options.enableDeferredLoading;
+    this._options.enableEnum = options.enableEnum;
     this._options.dart2jsHint = options.dart2jsHint;
     this._options.hint = options.hint;
     this._options.incremental = options.incremental;
@@ -2404,7 +2406,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
         dartEntry = new ScanDartTask(this, source, dartEntry.modificationTime, dartEntry.getValue(SourceEntry.CONTENT)).perform(_resultRecorder) as DartEntry;
       } on AnalysisException catch (exception) {
         throw exception;
-      } on JavaException catch (exception, stackTrace) {
+      } catch (exception, stackTrace) {
         throw new AnalysisException("Exception", new CaughtException(exception, stackTrace));
       }
       state = dartEntry.getState(descriptor);
@@ -2486,7 +2488,7 @@ class AnalysisContextImpl implements InternalAnalysisContext {
         htmlEntry = new ParseHtmlTask(this, source, htmlEntry.modificationTime, htmlEntry.getValue(SourceEntry.CONTENT)).perform(_resultRecorder) as HtmlEntry;
       } on AnalysisException catch (exception) {
         throw exception;
-      } on JavaException catch (exception, stackTrace) {
+      } catch (exception, stackTrace) {
         throw new AnalysisException("Exception", new CaughtException(exception, stackTrace));
       }
       state = htmlEntry.getState(descriptor);
@@ -3305,6 +3307,14 @@ class AnalysisContextImpl implements InternalAnalysisContext {
    * @return the next task that needs to be performed for the given source
    */
   AnalysisContextImpl_TaskData _getNextAnalysisTaskForSource(Source source, SourceEntry sourceEntry, bool isPriority, bool hintsEnabled) {
+    // Refuse to generate tasks for html based files that are above 1500 KB
+//    if (sourceEntry is HtmlEntryImpl && source is FileBasedSource) {
+//      // TODO (jwren) we still need to report an error of some kind back to the client.
+//      JavaFile file = (source as FileBasedSource).file;
+//      if (file.length() > (1500 * 1024)) {
+//        return new AnalysisContextImpl_TaskData(null, false);
+//      }
+//    }
     if (sourceEntry == null) {
       return new AnalysisContextImpl_TaskData(null, false);
     }
@@ -5694,18 +5704,21 @@ class AnalysisContextImpl_CycleBuilder {
     List<CycleBuilder_SourceEntryPair> pairs = new List<CycleBuilder_SourceEntryPair>();
     Source librarySource = library.librarySource;
     DartEntry libraryEntry = AnalysisContextImpl_this._getReadableDartEntry(librarySource);
-    if (libraryEntry != null && libraryEntry.getState(DartEntry.PARSED_UNIT) != CacheState.ERROR) {
-      _ensureResolvableCompilationUnit(librarySource, libraryEntry);
-      pairs.add(new CycleBuilder_SourceEntryPair(librarySource, libraryEntry));
-      List<Source> partSources = _getSources(librarySource, libraryEntry, DartEntry.INCLUDED_PARTS);
-      int count = partSources.length;
-      for (int i = 0; i < count; i++) {
-        Source partSource = partSources[i];
-        DartEntry partEntry = AnalysisContextImpl_this._getReadableDartEntry(partSource);
-        if (partEntry != null && partEntry.getState(DartEntry.PARSED_UNIT) != CacheState.ERROR) {
-          _ensureResolvableCompilationUnit(partSource, partEntry);
-          pairs.add(new CycleBuilder_SourceEntryPair(partSource, partEntry));
-        }
+    if (libraryEntry == null) {
+      throw new AnalysisException("Cannot find entry for ${librarySource.fullName}");
+    } else if (libraryEntry.getState(DartEntry.PARSED_UNIT) == CacheState.ERROR) {
+      throw new AnalysisException("Cannot compute parsed unit for ${librarySource.fullName}");
+    }
+    _ensureResolvableCompilationUnit(librarySource, libraryEntry);
+    pairs.add(new CycleBuilder_SourceEntryPair(librarySource, libraryEntry));
+    List<Source> partSources = _getSources(librarySource, libraryEntry, DartEntry.INCLUDED_PARTS);
+    int count = partSources.length;
+    for (int i = 0; i < count; i++) {
+      Source partSource = partSources[i];
+      DartEntry partEntry = AnalysisContextImpl_this._getReadableDartEntry(partSource);
+      if (partEntry != null && partEntry.getState(DartEntry.PARSED_UNIT) != CacheState.ERROR) {
+        _ensureResolvableCompilationUnit(partSource, partEntry);
+        pairs.add(new CycleBuilder_SourceEntryPair(partSource, partEntry));
       }
     }
     return pairs;
@@ -6318,11 +6331,25 @@ abstract class AnalysisOptions {
   bool get dart2jsHint;
 
   /**
-   * Return `true` if analysis is to include the new "deferred loading" support.
+   * Return `true` if analysis is to include the new async support.
    *
-   * @return `true` if analysis is to include the new "deferred loading" support
+   * @return `true` if analysis is to include the new async support
+   */
+  bool get enableAsync;
+
+  /**
+   * Return `true` if analysis is to include the new deferred loading support.
+   *
+   * @return `true` if analysis is to include the new deferred loading support
    */
   bool get enableDeferredLoading;
+
+  /**
+   * Return `true` if analysis is to include the new enum support.
+   *
+   * @return `true` if analysis is to include the new enum support
+   */
+  bool get enableEnum;
 
   /**
    * Return `true` if errors, warnings and hints should be generated for sources in the SDK.
@@ -6366,14 +6393,19 @@ class AnalysisOptionsImpl implements AnalysisOptions {
   static int DEFAULT_CACHE_SIZE = 64;
 
   /**
+   * The default value for enabling async support.
+   */
+  static bool DEFAULT_ENABLE_ASYNC = false;
+
+  /**
    * The default value for enabling deferred loading.
    */
   static bool DEFAULT_ENABLE_DEFERRED_LOADING = true;
 
   /**
-   * The default value for enabling async support.
+   * The default value for enabling enum support.
    */
-  static bool DEFAULT_ENABLE_ASYNC = false;
+  static bool DEFAULT_ENABLE_ENUM = false;
 
   /**
    * A flag indicating whether analysis is to analyze Angular.
@@ -6401,9 +6433,19 @@ class AnalysisOptionsImpl implements AnalysisOptions {
   bool dart2jsHint = true;
 
   /**
+   * A flag indicating whether analysis is to enable async support.
+   */
+  bool enableAsync = DEFAULT_ENABLE_ASYNC;
+
+  /**
    * A flag indicating whether analysis is to enable deferred loading.
    */
   bool enableDeferredLoading = DEFAULT_ENABLE_DEFERRED_LOADING;
+
+  /**
+   * A flag indicating whether analysis is to enable enum support.
+   */
+  bool enableEnum = DEFAULT_ENABLE_ENUM;
 
   /**
    * A flag indicating whether errors, warnings and hints should be generated for sources in the
@@ -6444,7 +6486,9 @@ class AnalysisOptionsImpl implements AnalysisOptions {
     analyzePolymer = options.analyzePolymer;
     cacheSize = options.cacheSize;
     dart2jsHint = options.dart2jsHint;
+    enableAsync = options.enableAsync;
     enableDeferredLoading = options.enableDeferredLoading;
+    enableEnum = options.enableEnum;
     _generateSdkErrors = options.generateSdkErrors;
     hint = options.hint;
     incremental = options.incremental;
@@ -6602,7 +6646,7 @@ abstract class AnalysisTask {
       internalPerform();
     } on AnalysisException catch (exception) {
       throw exception;
-    } on JavaException catch (exception, stackTrace) {
+    } catch (exception, stackTrace) {
       throw new AnalysisException("Exception", new CaughtException(exception, stackTrace));
     }
   }
@@ -7051,7 +7095,7 @@ class AngularHtmlUnitResolver extends ht.RecursiveXmlVisitor<Object> {
           continue;
         }
         try {
-          Source templateSource = _source.resolveRelative(parseUriWithException(templateUri));
+          Source templateSource = _context.sourceFactory.forUri2(_source.resolveRelativeUri(parseUriWithException(templateUri)));
           if (!_context.exists(templateSource)) {
             templateSource = _context.sourceFactory.resolveUri(_source, "package:${templateUri}");
             if (!_context.exists(templateSource)) {
@@ -12615,7 +12659,7 @@ abstract class Logger {
    * @param message an explanation of why the error occurred or what it means
    * @param exception the exception being logged
    */
-  void logError2(String message, Exception exception);
+  void logError2(String message, exception);
 
   /**
    * Log the given informational message.
@@ -12643,7 +12687,7 @@ class Logger_NullLogger implements Logger {
   }
 
   @override
-  void logError2(String message, Exception exception) {
+  void logError2(String message, exception) {
   }
 
   @override
@@ -12651,7 +12695,7 @@ class Logger_NullLogger implements Logger {
   }
 
   @override
-  void logInformation2(String message, Exception exception) {
+  void logInformation2(String message, exception) {
   }
 }
 
@@ -13114,7 +13158,9 @@ class ParseDartTask extends AnalysisTask {
       Parser parser = new Parser(source, errorListener);
       AnalysisOptions options = context.analysisOptions;
       parser.parseFunctionBodies = options.analyzeFunctionBodies;
+      parser.parseAsync = options.enableAsync;
       parser.parseDeferredLibraries = options.enableDeferredLoading;
+      parser.parseEnum = options.enableEnum;
       _unit = parser.parseCompilationUnit(_tokenStream);
       _unit.lineInfo = lineInfo;
       AnalysisContext analysisContext = context;
@@ -13274,7 +13320,7 @@ class ParseHtmlTask extends AnalysisTask {
       _unit.accept(new RecursiveXmlVisitor_ParseHtmlTask_internalPerform(this, errorListener));
       _errors = errorListener.getErrorsForSource(source);
       _referencedLibraries = librarySources;
-    } on JavaException catch (exception, stackTrace) {
+    } catch (exception, stackTrace) {
       throw new AnalysisException("Exception", new CaughtException(exception, stackTrace));
     }
   }
@@ -14881,7 +14927,7 @@ class ScanDartTask extends AnalysisTask {
       _tokenStream = scanner.tokenize();
       _lineInfo = new LineInfo(scanner.lineStarts);
       _errors = errorListener.getErrorsForSource(source);
-    } on JavaException catch (exception, stackTrace) {
+    } catch (exception, stackTrace) {
       throw new AnalysisException("Exception", new CaughtException(exception, stackTrace));
     } finally {
       timeCounterScan.stop();

@@ -1885,6 +1885,22 @@ abstract class CompilationUnitElement implements Element, UriReferencedElement {
   LibraryElement get enclosingElement;
 
   /**
+   * Return the enum defined in this compilation unit that has the given name, or `null` if
+   * this compilation unit does not define an enum with the given name.
+   *
+   * @param enumName the name of the enum to be returned
+   * @return the enum with the given name that is defined in this compilation unit
+   */
+  ClassElement getEnum(String enumName);
+
+  /**
+   * Return an array containing all of the enums contained in this compilation unit.
+   *
+   * @return an array containing all of the enums contained in this compilation unit
+   */
+  List<ClassElement> get enums;
+
+  /**
    * Return an array containing all of the top-level functions contained in this compilation unit.
    *
    * @return the top-level functions contained in this compilation unit
@@ -1962,6 +1978,11 @@ class CompilationUnitElementImpl extends UriReferencedElementImpl implements Com
    * compilation unit.
    */
   List<PropertyAccessorElement> _accessors = PropertyAccessorElementImpl.EMPTY_ARRAY;
+
+  /**
+   * An array containing all of the enums contained in this compilation unit.
+   */
+  List<ClassElement> _enums = ClassElementImpl.EMPTY_ARRAY;
 
   /**
    * An array containing all of the top-level functions contained in this compilation unit.
@@ -2050,6 +2071,19 @@ class CompilationUnitElementImpl extends UriReferencedElementImpl implements Com
   LibraryElement get enclosingElement => super.enclosingElement as LibraryElement;
 
   @override
+  ClassElement getEnum(String enumName) {
+    for (ClassElement enumDeclaration in _enums) {
+      if (enumDeclaration.name == enumName) {
+        return enumDeclaration;
+      }
+    }
+    return null;
+  }
+
+  @override
+  List<ClassElement> get enums => _enums;
+
+  @override
   List<FunctionElement> get functions => _functions;
 
   @override
@@ -2113,6 +2147,18 @@ class CompilationUnitElementImpl extends UriReferencedElementImpl implements Com
       (view as AngularViewElementImpl).enclosingElement = this;
     }
     this._angularViews = angularViews;
+  }
+
+  /**
+   * Set the enums contained in this compilation unit to the given enums.
+   *
+   * @param enums enums contained in this compilation unit
+   */
+  void set enums(List<ClassElement> enums) {
+    for (ClassElement enumDeclaration in enums) {
+      (enumDeclaration as ClassElementImpl).enclosingElement = this;
+    }
+    this._enums = enums;
   }
 
   /**
@@ -2226,7 +2272,16 @@ class ConstFieldElementImpl extends FieldElementImpl {
    *
    * @param name the name of this element
    */
-  ConstFieldElementImpl(Identifier name) : super.forNode(name);
+  ConstFieldElementImpl.con1(Identifier name) : super.forNode(name);
+
+  /**
+   * Initialize a newly created synthetic field element to have the given name.
+   *
+   * @param name the name of this element
+   * @param nameOffset the offset of the name of this element in the file that contains the
+   *          declaration of this element
+   */
+  ConstFieldElementImpl.con2(String name, int offset) : super(name, offset);
 
   @override
   EvaluationResultImpl get evaluationResult => _result;
@@ -3729,16 +3784,10 @@ class ElementLocationImpl implements ElementLocation {
     if (otherComponents.length != length) {
       return false;
     }
-    for (int i = length - 1; i >= 2; i--) {
+    for (int i = 0; i < length; i++) {
       if (_components[i] != otherComponents[i]) {
         return false;
       }
-    }
-    if (length > 1 && !_equalSourceComponents(_components[1], otherComponents[1])) {
-      return false;
-    }
-    if (length > 0 && !_equalSourceComponents(_components[0], otherComponents[0])) {
-      return false;
     }
     return true;
   }
@@ -3764,13 +3813,7 @@ class ElementLocationImpl implements ElementLocation {
     int result = 1;
     for (int i = 0; i < _components.length; i++) {
       String component = _components[i];
-      int componentHash;
-      if (i <= 1) {
-        componentHash = _hashSourceComponent(component);
-      } else {
-        componentHash = component.hashCode;
-      }
-      result = 31 * result + componentHash;
+      result = 31 * result + component.hashCode;
     }
     return result;
   }
@@ -3824,45 +3867,6 @@ class ElementLocationImpl implements ElementLocation {
       }
       builder.appendChar(currentChar);
     }
-  }
-
-  /**
-   * Return `true` if the given components, when interpreted to be encoded sources with a
-   * leading source type indicator, are equal when the source type's are ignored.
-   *
-   * @param left the left component being compared
-   * @param right the right component being compared
-   * @return `true` if the given components are equal when the source type's are ignored
-   */
-  bool _equalSourceComponents(String left, String right) {
-    // TODO(brianwilkerson) This method can go away when sources no longer have a URI kind.
-    if (left == null) {
-      return right == null;
-    } else if (right == null) {
-      return false;
-    }
-    int leftLength = left.length;
-    int rightLength = right.length;
-    if (leftLength != rightLength) {
-      return false;
-    } else if (leftLength <= 1 || rightLength <= 1) {
-      return left == right;
-    }
-    return javaStringRegionMatches(left, 1, right, 1, leftLength - 1);
-  }
-
-  /**
-   * Return the hash code of the given encoded source component, ignoring the source type indicator.
-   *
-   * @param sourceComponent the component to compute a hash code
-   * @return the hash code of the given encoded source component
-   */
-  int _hashSourceComponent(String sourceComponent) {
-    // TODO(brianwilkerson) This method can go away when sources no longer have a URI kind.
-    if (sourceComponent.length <= 1) {
-      return sourceComponent.hashCode;
-    }
-    return sourceComponent.substring(1).hashCode;
   }
 }
 
@@ -4612,22 +4616,45 @@ class FieldMember extends VariableMember implements FieldElement {
    * @return the field element that will return the correctly substituted types
    */
   static FieldElement from(FieldElement baseField, InterfaceType definingType) {
-    if (baseField == null || definingType.typeArguments.length == 0) {
-      return baseField;
-    }
-    DartType baseType = baseField.type;
-    if (baseType == null) {
-      return baseField;
-    }
-    List<DartType> argumentTypes = definingType.typeArguments;
-    List<DartType> parameterTypes = definingType.element.type.typeArguments;
-    DartType substitutedType = baseType.substitute2(argumentTypes, parameterTypes);
-    if (baseType == substitutedType) {
+    if (!_isChangedByTypeSubstitution(baseField, definingType)) {
       return baseField;
     }
     // TODO(brianwilkerson) Consider caching the substituted type in the instance. It would use more
     // memory but speed up some operations. We need to see how often the type is being re-computed.
     return new FieldMember(baseField, definingType);
+  }
+
+  /**
+   * Determine whether the given field's type is changed when type parameters from the defining
+   * type's declaration are replaced with the actual type arguments from the defining type.
+   *
+   * @param baseField the base field
+   * @param definingType the type defining the parameters and arguments to be used in the
+   *          substitution
+   * @return true if the type is changed by type substitution.
+   */
+  static bool _isChangedByTypeSubstitution(FieldElement baseField, InterfaceType definingType) {
+    List<DartType> argumentTypes = definingType.typeArguments;
+    if (baseField != null && argumentTypes.length != 0) {
+      DartType baseType = baseField.type;
+      List<DartType> parameterTypes = definingType.element.type.typeArguments;
+      if (baseType != null) {
+        DartType substitutedType = baseType.substitute2(argumentTypes, parameterTypes);
+        if (baseType != substitutedType) {
+          return true;
+        }
+      }
+      // If the field has a propagated type, then we need to check whether the propagated type
+      // needs substitution.
+      DartType basePropagatedType = baseField.propagatedType;
+      if (basePropagatedType != null) {
+        DartType substitutedPropagatedType = basePropagatedType.substitute2(argumentTypes, parameterTypes);
+        if (basePropagatedType != substitutedPropagatedType) {
+          return true;
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -4658,6 +4685,15 @@ class FieldMember extends VariableMember implements FieldElement {
 
   @override
   bool get isStatic => baseElement.isStatic;
+
+  @override
+  String toString() {
+    JavaStringBuilder builder = new JavaStringBuilder();
+    builder.append(type);
+    builder.append(" ");
+    builder.append(displayName);
+    return builder.toString();
+  }
 
   @override
   InterfaceType get definingType => super.definingType as InterfaceType;
@@ -7358,14 +7394,21 @@ class InterfaceTypeImpl extends TypeImpl implements InterfaceType {
  * Combination of [AngularTagSelectorElementImpl] and [HasAttributeSelectorElementImpl].
  */
 class IsTagHasAttributeSelectorElementImpl extends AngularSelectorElementImpl {
-  final String tagName;
+  String _tagName;
 
-  final String attributeName;
+  String _attributeName;
 
-  IsTagHasAttributeSelectorElementImpl(this.tagName, this.attributeName) : super(null, -1);
+  IsTagHasAttributeSelectorElementImpl(String tagName, String attributeName) : super("${tagName}[${attributeName}]", -1) {
+    this._tagName = tagName;
+    this._attributeName = attributeName;
+  }
 
   @override
-  bool apply(XmlTagNode node) => node.tag == tagName && node.getAttribute(attributeName) != null;
+  bool apply(XmlTagNode node) => node.tag == _tagName && node.getAttribute(_attributeName) != null;
+
+  String get attributeName => _attributeName;
+
+  String get tagName => _tagName;
 }
 
 /**
@@ -9040,6 +9083,16 @@ class ParameterElementImpl extends VariableElementImpl implements ParameterEleme
   accept(ElementVisitor visitor) => visitor.visitParameterElement(this);
 
   @override
+  ElementImpl getChild(String identifier) {
+    for (ParameterElement parameter in _parameters) {
+      if ((parameter as ParameterElementImpl).identifier == identifier) {
+        return parameter as ParameterElementImpl;
+      }
+    }
+    return null;
+  }
+
+  @override
   SourceRange get defaultValueRange {
     if (_defaultValueRangeLength < 0) {
       return null;
@@ -9835,19 +9888,46 @@ class PropertyAccessorMember extends ExecutableMember implements PropertyAccesso
    * @return the property accessor element that will return the correctly substituted types
    */
   static PropertyAccessorElement from(PropertyAccessorElement baseAccessor, InterfaceType definingType) {
-    if (baseAccessor == null || definingType.typeArguments.length == 0) {
-      return baseAccessor;
-    }
-    FunctionType baseType = baseAccessor.type;
-    List<DartType> argumentTypes = definingType.typeArguments;
-    List<DartType> parameterTypes = definingType.element.type.typeArguments;
-    FunctionType substitutedType = baseType.substitute2(argumentTypes, parameterTypes);
-    if (baseType == substitutedType) {
+    if (!_isChangedByTypeSubstitution(baseAccessor, definingType)) {
       return baseAccessor;
     }
     // TODO(brianwilkerson) Consider caching the substituted type in the instance. It would use more
     // memory but speed up some operations. We need to see how often the type is being re-computed.
     return new PropertyAccessorMember(baseAccessor, definingType);
+  }
+
+  /**
+   * Determine whether the given property accessor's type is changed when type parameters from the
+   * defining type's declaration are replaced with the actual type arguments from the defining type.
+   *
+   * @param baseAccessor the base property accessor
+   * @param definingType the type defining the parameters and arguments to be used in the
+   *          substitution
+   * @return true if the type is changed by type substitution.
+   */
+  static bool _isChangedByTypeSubstitution(PropertyAccessorElement baseAccessor, InterfaceType definingType) {
+    List<DartType> argumentTypes = definingType.typeArguments;
+    if (baseAccessor != null && argumentTypes.length != 0) {
+      FunctionType baseType = baseAccessor.type;
+      List<DartType> parameterTypes = definingType.element.type.typeArguments;
+      FunctionType substitutedType = baseType.substitute2(argumentTypes, parameterTypes);
+      if (baseType != substitutedType) {
+        return true;
+      }
+      // If this property accessor is based on a field, that field might have a propagated type.
+      // In which case we need to check whether the propagated type of the field needs substitution.
+      PropertyInducingElement field = baseAccessor.variable;
+      if (!field.isSynthetic) {
+        DartType baseFieldType = field.propagatedType;
+        if (baseFieldType != null) {
+          DartType substitutedFieldType = baseFieldType.substitute2(argumentTypes, parameterTypes);
+          if (baseFieldType != substitutedFieldType) {
+            return true;
+          }
+        }
+      }
+    }
+    return false;
   }
 
   /**
@@ -10853,11 +10933,6 @@ class TypeParameterTypeImpl extends TypeImpl implements TypeParameterType {
     // Reflexivity: T is S.
     //
     if (this == s) {
-      return true;
-    }
-    // S is bottom.
-    //
-    if (s.isBottom) {
       return true;
     }
     // S is dynamic.
