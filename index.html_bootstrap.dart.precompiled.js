@@ -8345,7 +8345,6 @@ y=z.gN(b)
 if(!J.xC(a.IJ,y)){x=J.RE(y)
 J.Yd(a.IJ,x.gEj(y))
 x.sEj(y,z.gtv(b).getData("text/html"))}},"$1","gd0",2,0,104,105],
-$isPe:true,
 static:{Fv:function(a){var z,y,x,w
 z=P.L5(null,null,null,P.qU,W.Bn)
 y=P.qU
@@ -8630,7 +8629,7 @@ v.saX(u,s)
 this.QS(a)}},"$1","gSy",2,0,109,2],
 Tt:[function(a,b){var z,y,x,w
 z=J.RE(b)
-if(!!J.x(z.gN(b)).$isPe){y=H.Go(z.gN(b),"$isPe").id
+if(!!J.x(z.gN(b)).$isHk){y=H.Go(z.gN(b),"$isHk").id
 z=a.Mw
 x=J.w1(z)
 w=x.DX(z,new N.Eb(y),new N.PA(y))

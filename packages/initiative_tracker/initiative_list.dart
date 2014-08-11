@@ -5,7 +5,7 @@ import 'package:polymer/polymer.dart';
 import 'package:paper_elements/paper_input.dart';
 import 'package:paper_elements/paper_item.dart';
 
-import 'package:initiative_tracker/draggable_item.dart';
+//import 'package:initiative_tracker/draggable_item.dart';
 
 
 @CustomTag('initiative-list')
@@ -63,8 +63,8 @@ class InitiativeList extends PolymerElement with ChangeNotifier  {
   }
 
   finish(Event e) {
-    if(e.target is DraggableItem) {
-      DraggableItem target = e.target as DraggableItem;
+    if(e.target is PaperItem) {
+      PaperItem target = e.target as PaperItem;
       String name = target.id;
       var init = notDoneInitiatives.firstWhere((init) => init.name == name, orElse: () => new Initiative.create(name, 0, 0));
       if(notDoneInitiatives.first == init) {
