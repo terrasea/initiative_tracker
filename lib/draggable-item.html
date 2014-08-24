@@ -1,0 +1,22 @@
+<link rel="import" href="../../packages/polymer/polymer.html">
+
+<link rel="import" href="../../packages/core_elements/core_icons.html">
+<link rel="import" href="../../packages/core_elements/core_icon.html">
+
+<polymer-element name="draggable-item">
+  <template>
+    <style>
+      :host {
+        display: block;
+        width: 100%;
+        height: 50px;
+      }
+      
+      div {
+        height: 50px;
+      }
+    </style>
+    <div id="draggable" draggable="false"><core-icon _icon="{{ icon }}"></core-icon><span id="name">{{ name }}:</span> <span id="initiative">{{ initiative }}</span><content></content></div>
+  </template>
+  <script type="application/dart" src="draggable_item.dart"></script>
+</polymer-element>
