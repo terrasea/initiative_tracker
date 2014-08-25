@@ -1,6 +1,6 @@
-import 'package:polymer/polymer.dart';
+import 'dart:html' show DivElement, MouseEvent, Element, TouchEvent;
 
-import 'dart:html' show DivElement, MouseEvent, Element;
+import 'package:polymer/polymer.dart';
 
 @CustomTag('draggable-item')
 class DraggableItem extends PolymerElement {
@@ -16,64 +16,68 @@ class DraggableItem extends PolymerElement {
   int get initiative => readValue(#initiative);
   set initiative(val) => writeValue(#initiative, val);
 
-  Element _dragSourceEl;
+  @PublishedProperty(reflect: true)
+  bool get dragging => readValue(#dragging);
+  set dragging(val) => writeValue(#dragging, val);
 
   DraggableItem.created() : super.created();
 
   ready() {
-    draggable = true;
-    onDragStart.listen(_onDragStart);
-    onDragEnd.listen(_onDragEnd);
-    onDragEnter.listen(_onDragEnter);
-    onDragOver.listen(_onDragOver);
-    onDragLeave.listen(_onDragLeave);
-    onDrop.listen(_onDrop);
-    var host = this.parent == null ? this : this.parent;
-    host.setAttribute('touch-action', 'none');
-    host.style.cssText += '; user-select: none; -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none;';
+    super.ready();
+    var col = $['draggable'];
+
+    //col.onDragStart.listen(_onDragStart);
+/*    col.onDragEnd.listen(_onDragEnd);
+    col.onDragEnter.listen(_onDragEnter);*/
+    //col.onDragOver.listen(_onDragOver);
+    /*col.onDragLeave.listen(_onDragLeave);
+     */
+    //col.onDrop.listen(_onDrop);
   }
 
   void _onDragStart(MouseEvent event) {
     Element dragTarget = event.target;
     dragTarget.classes.add('moving');
-    _dragSourceEl = dragTarget;
-    event.dataTransfer.effectAllowed = 'move';
-    event.dataTransfer.setData('text/html', dragTarget.innerHtml);
-    print('start');
+    //event.dataTransfer.effectAllowed = 'move';
+    fire('drag-started', detail: id);
   }
-
+/*
   void _onDragEnd(MouseEvent event) {
     Element dragTarget = event.target;
     dragTarget.classes.remove('moving');
+    print('drag-end');
   }
 
   void _onDragEnter(MouseEvent event) {
     Element dropTarget = event.target;
     dropTarget.classes.add('over');
+    print('drag-enter');
   }
-
+*/
   void _onDragOver(MouseEvent event) {
     // This is necessary to allow us to drop.
     event.preventDefault();
     event.dataTransfer.dropEffect = 'move';
+    print('drag-over');
   }
-
+/*
   void _onDragLeave(MouseEvent event) {
     Element dropTarget = event.target;
     dropTarget.classes.remove('over');
+    style.borderColor = "red";
+    style.borderWidth = "0";
+    print('drag-leave');
   }
-
+*/
   void _onDrop(MouseEvent event) {
     // Stop the browser from redirecting.
     event.stopPropagation();
 
     // Don't do anything if dropping onto the same column we're dragging.
     Element dropTarget = event.target;
-    if (_dragSourceEl != dropTarget) {
-      // Set the source column's HTML to the HTML of the column we dropped on.
-      _dragSourceEl.innerHtml = dropTarget.innerHtml;
-      dropTarget.innerHtml = event.dataTransfer.getData('text/html');
-    }
+    fire('drop-finished', detail: id);
+    print('drop');
+    //dropTarget.innerHtml = event.dataTransfer.getData('text/html');
   }
 
 }

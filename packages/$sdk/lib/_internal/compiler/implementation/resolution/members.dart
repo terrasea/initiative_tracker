@@ -5,25 +5,30 @@
 part of resolution;
 
 abstract class TreeElements {
-  Element get currentElement;
-  Setlet<Node> get superUses;
+  AnalyzableElement get analyzedElement;
+  Iterable<Node> get superUses;
 
   /// Iterables of the dependencies that this [TreeElement] records of
-  /// [currentElement].
+  /// [analyzedElement].
   Iterable<Element> get allElements;
   void forEachConstantNode(f(Node n, Constant c));
 
   /// A set of additional dependencies.  See [registerDependency] below.
-  Setlet<Element> get otherDependencies;
+  Iterable<Element> get otherDependencies;
 
   Element operator[](Node node);
-  Selector getSelector(Send send);
+
+  // TODO(johnniwinther): Investigate whether [Node] could be a [Send].
+  Selector getSelector(Node node);
   Selector getGetterSelectorInComplexSendSet(SendSet node);
   Selector getOperatorSelectorInComplexSendSet(SendSet node);
   DartType getType(Node node);
   void setSelector(Node node, Selector selector);
   void setGetterSelectorInComplexSendSet(SendSet node, Selector selector);
   void setOperatorSelectorInComplexSendSet(SendSet node, Selector selector);
+
+  /// Returns the for-in loop variable for [node].
+  Element getForInVariable(ForIn node);
   Selector getIteratorSelector(ForIn node);
   Selector getMoveNextSelector(ForIn node);
   Selector getCurrentSelector(ForIn node);
@@ -33,6 +38,13 @@ abstract class TreeElements {
   void setConstant(Node node, Constant constant);
   Constant getConstant(Node node);
   bool isAssert(Send send);
+
+  /// Returns the [FunctionElement] defined by [node].
+  FunctionElement getFunctionDefinition(FunctionExpression node);
+
+  /// Returns target constructor for the redirecting factory body [node].
+  ConstructorElement getRedirectingTargetConstructor(
+      RedirectingFactoryBody node);
 
   /**
    * Returns [:true:] if [node] is a type literal.
@@ -45,7 +57,7 @@ abstract class TreeElements {
   /// Returns the type that the type literal [node] refers to.
   DartType getTypeLiteralType(Send node);
 
-  /// Register additional dependencies required by [currentElement].
+  /// Register additional dependencies required by [analyzedElement].
   /// For example, elements that are used by a backend.
   void registerDependency(Element element);
 
@@ -76,39 +88,35 @@ abstract class TreeElements {
 }
 
 class TreeElementMapping implements TreeElements {
-  final Element currentElement;
-  final Map<Spannable, Selector> selectors = new Map<Spannable, Selector>();
-  final Map<Node, DartType> types = new Map<Node, DartType>();
-  final Setlet<Node> superUses = new Setlet<Node>();
-  final Setlet<Element> otherDependencies = new Setlet<Element>();
-  final Map<Node, Constant> constants = new Map<Node, Constant>();
-  final Map<VariableElement, List<Node>> potentiallyMutated =
-      new Map<VariableElement, List<Node>>();
-  final Map<Node, Map<VariableElement, List<Node>>> potentiallyMutatedIn =
-      new Map<Node,  Map<VariableElement, List<Node>>>();
-  final Map<VariableElement, List<Node>> potentiallyMutatedInClosure =
-      new Map<VariableElement, List<Node>>();
-  final Map<Node, Map<VariableElement, List<Node>>> accessedByClosureIn =
-      new Map<Node, Map<VariableElement, List<Node>>>();
-  final Setlet<Element> elements = new Setlet<Element>();
-  final Setlet<Send> asserts = new Setlet<Send>();
+  final AnalyzableElement analyzedElement;
+  Map<Spannable, Selector> _selectors;
+  Map<Node, DartType> _types;
+  Setlet<Node> _superUses;
+  Setlet<Element> _otherDependencies;
+  Map<Node, Constant> _constants;
+  Map<VariableElement, List<Node>> _potentiallyMutated;
+  Map<Node, Map<VariableElement, List<Node>>> _potentiallyMutatedIn;
+  Map<VariableElement, List<Node>> _potentiallyMutatedInClosure;
+  Map<Node, Map<VariableElement, List<Node>>> _accessedByClosureIn;
+  Setlet<Element> _elements;
+  Setlet<Send> _asserts;
 
   /// Map from nodes to the targets they define.
-  Map<Node, JumpTarget> definedTargets;
+  Map<Node, JumpTarget> _definedTargets;
 
   /// Map from goto statements to their targets.
-  Map<GotoStatement, JumpTarget> usedTargets;
+  Map<GotoStatement, JumpTarget> _usedTargets;
 
   /// Map from labels to their label definition.
-  Map<Label, LabelDefinition> definedLabels;
+  Map<Label, LabelDefinition> _definedLabels;
 
   /// Map from labeled goto statements to the labels they target.
-  Map<GotoStatement, LabelDefinition> targetLabels;
+  Map<GotoStatement, LabelDefinition> _targetLabels;
 
-  final int hashCode = ++hashCodeCounter;
-  static int hashCodeCounter = 0;
+  final int hashCode = ++_hashCodeCounter;
+  static int _hashCodeCounter = 0;
 
-  TreeElementMapping(this.currentElement);
+  TreeElementMapping(this.analyzedElement);
 
   operator []=(Node node, Element element) {
     assert(invariant(node, () {
@@ -121,8 +129,8 @@ class TreeElementMapping implements TreeElements {
     // TODO(johnniwinther): Simplify this invariant to use only declarations in
     // [TreeElements].
     assert(invariant(node, () {
-      if (!element.isErroneous && currentElement != null && element.isPatch) {
-        return currentElement.implementationLibrary.isPatch;
+      if (!element.isErroneous && analyzedElement != null && element.isPatch) {
+        return analyzedElement.implementationLibrary.isPatch;
       }
       return true;
     }));
@@ -132,40 +140,68 @@ class TreeElementMapping implements TreeElements {
     //                  getTreeElement(node) == null,
     //                  message: '${getTreeElement(node)}; $element'));
 
-    elements.add(element);
+    if (_elements == null) {
+      _elements = new Setlet<Element>();
+    }
+    _elements.add(element);
     setTreeElement(node, element);
   }
 
   operator [](Node node) => getTreeElement(node);
 
   void setType(Node node, DartType type) {
-    types[node] = type;
+    if (_types == null) {
+      _types = new Maplet<Node, DartType>();
+    }
+    _types[node] = type;
   }
 
-  DartType getType(Node node) => types[node];
+  DartType getType(Node node) => _types != null ? _types[node] : null;
+
+  Iterable<Node> get superUses {
+    return _superUses != null ? _superUses : const <Node>[];
+  }
+
+  void addSuperUse(Node node) {
+    if (_superUses == null) {
+      _superUses = new Setlet<Node>();
+    }
+    _superUses.add(node);
+  }
+
+  Selector _getSelector(Spannable node) {
+    return _selectors != null ? _selectors[node] : null;
+  }
+
+  void _setSelector(Spannable node, Selector selector) {
+    if (_selectors == null) {
+      _selectors = new Maplet<Spannable, Selector>();
+    }
+    _selectors[node] = selector;
+  }
 
   void setSelector(Node node, Selector selector) {
-    selectors[node] = selector;
+    _setSelector(node, selector);
   }
 
-  Selector getSelector(Node node) {
-    return selectors[node];
-  }
+  Selector getSelector(Node node) => _getSelector(node);
+
+  int getSelectorCount() => _selectors == null ? 0 : _selectors.length;
 
   void setGetterSelectorInComplexSendSet(SendSet node, Selector selector) {
-    selectors[node.selector] = selector;
+    _setSelector(node.selector, selector);
   }
 
   Selector getGetterSelectorInComplexSendSet(SendSet node) {
-    return selectors[node.selector];
+    return _getSelector(node.selector);
   }
 
   void setOperatorSelectorInComplexSendSet(SendSet node, Selector selector) {
-    selectors[node.assignmentOperator] = selector;
+    _setSelector(node.assignmentOperator, selector);
   }
 
   Selector getOperatorSelectorInComplexSendSet(SendSet node) {
-    return selectors[node.assignmentOperator];
+    return _getSelector(node.assignmentOperator);
   }
 
   // The following methods set selectors on the "for in" node. Since
@@ -173,35 +209,42 @@ class TreeElementMapping implements TreeElements {
   // and we arbitrarily choose which ones.
 
   void setIteratorSelector(ForIn node, Selector selector) {
-    selectors[node] = selector;
+    _setSelector(node, selector);
   }
 
   Selector getIteratorSelector(ForIn node) {
-    return selectors[node];
+    return _getSelector(node);
   }
 
   void setMoveNextSelector(ForIn node, Selector selector) {
-    selectors[node.forToken] = selector;
+    _setSelector(node.forToken, selector);
   }
 
   Selector getMoveNextSelector(ForIn node) {
-    return selectors[node.forToken];
+    return _getSelector(node.forToken);
   }
 
   void setCurrentSelector(ForIn node, Selector selector) {
-    selectors[node.inToken] = selector;
+    _setSelector(node.inToken, selector);
   }
 
   Selector getCurrentSelector(ForIn node) {
-    return selectors[node.inToken];
+    return _getSelector(node.inToken);
+  }
+
+  Element getForInVariable(ForIn node) {
+    return this[node];
   }
 
   void setConstant(Node node, Constant constant) {
-    constants[node] = constant;
+    if (_constants == null) {
+      _constants = new Maplet<Node, Constant>();
+    }
+    _constants[node] = constant;
   }
 
   Constant getConstant(Node node) {
-    return constants[node];
+    return _constants != null ? _constants[node] : null;
   }
 
   bool isTypeLiteral(Send node) {
@@ -214,21 +257,33 @@ class TreeElementMapping implements TreeElements {
 
   void registerDependency(Element element) {
     if (element == null) return;
-    otherDependencies.add(element.implementation);
+    if (_otherDependencies == null) {
+      _otherDependencies = new Setlet<Element>();
+    }
+    _otherDependencies.add(element.implementation);
+  }
+
+  Iterable<Element> get otherDependencies {
+    return _otherDependencies != null ? _otherDependencies : const <Element>[];
   }
 
   List<Node> getPotentialMutations(VariableElement element) {
-    List<Node> mutations = potentiallyMutated[element];
+    if (_potentiallyMutated == null) return const <Node>[];
+    List<Node> mutations = _potentiallyMutated[element];
     if (mutations == null) return const <Node>[];
     return mutations;
   }
 
   void registerPotentialMutation(VariableElement element, Node mutationNode) {
-    potentiallyMutated.putIfAbsent(element, () => <Node>[]).add(mutationNode);
+    if (_potentiallyMutated == null) {
+      _potentiallyMutated = new Maplet<VariableElement, List<Node>>();
+    }
+    _potentiallyMutated.putIfAbsent(element, () => <Node>[]).add(mutationNode);
   }
 
   List<Node> getPotentialMutationsIn(Node node, VariableElement element) {
-    Map<VariableElement, List<Node>> mutationsIn = potentiallyMutatedIn[node];
+    if (_potentiallyMutatedIn == null) return const <Node>[];
+    Map<VariableElement, List<Node>> mutationsIn = _potentiallyMutatedIn[node];
     if (mutationsIn == null) return const <Node>[];
     List<Node> mutations = mutationsIn[element];
     if (mutations == null) return const <Node>[];
@@ -237,26 +292,35 @@ class TreeElementMapping implements TreeElements {
 
   void registerPotentialMutationIn(Node contextNode, VariableElement element,
                                     Node mutationNode) {
+    if (_potentiallyMutatedIn == null) {
+      _potentiallyMutatedIn =
+          new Maplet<Node, Map<VariableElement, List<Node>>>();
+    }
     Map<VariableElement, List<Node>> mutationMap =
-      potentiallyMutatedIn.putIfAbsent(contextNode,
-          () => new Map<VariableElement, List<Node>>());
+        _potentiallyMutatedIn.putIfAbsent(contextNode,
+          () => new Maplet<VariableElement, List<Node>>());
     mutationMap.putIfAbsent(element, () => <Node>[]).add(mutationNode);
   }
 
   List<Node> getPotentialMutationsInClosure(VariableElement element) {
-    List<Node> mutations = potentiallyMutatedInClosure[element];
+    if (_potentiallyMutatedInClosure == null) return const <Node>[];
+    List<Node> mutations = _potentiallyMutatedInClosure[element];
     if (mutations == null) return const <Node>[];
     return mutations;
   }
 
   void registerPotentialMutationInClosure(VariableElement element,
-                                           Node mutationNode) {
-    potentiallyMutatedInClosure.putIfAbsent(
+                                          Node mutationNode) {
+    if (_potentiallyMutatedInClosure == null) {
+      _potentiallyMutatedInClosure = new Maplet<VariableElement, List<Node>>();
+    }
+    _potentiallyMutatedInClosure.putIfAbsent(
         element, () => <Node>[]).add(mutationNode);
   }
 
   List<Node> getAccessesByClosureIn(Node node, VariableElement element) {
-    Map<VariableElement, List<Node>> accessesIn = accessedByClosureIn[node];
+    if (_accessedByClosureIn == null) return const <Node>[];
+    Map<VariableElement, List<Node>> accessesIn = _accessedByClosureIn[node];
     if (accessesIn == null) return const <Node>[];
     List<Node> accesses = accessesIn[element];
     if (accesses == null) return const <Node>[];
@@ -265,92 +329,109 @@ class TreeElementMapping implements TreeElements {
 
   void setAccessedByClosureIn(Node contextNode, VariableElement element,
                               Node accessNode) {
+    if (_accessedByClosureIn == null) {
+      _accessedByClosureIn = new Map<Node, Map<VariableElement, List<Node>>>();
+    }
     Map<VariableElement, List<Node>> accessMap =
-        accessedByClosureIn.putIfAbsent(contextNode,
-          () => new Map<VariableElement, List<Node>>());
+        _accessedByClosureIn.putIfAbsent(contextNode,
+          () => new Maplet<VariableElement, List<Node>>());
     accessMap.putIfAbsent(element, () => <Node>[]).add(accessNode);
   }
 
-  String toString() => 'TreeElementMapping($currentElement)';
+  String toString() => 'TreeElementMapping($analyzedElement)';
 
-  Iterable<Element> get allElements => elements;
+  Iterable<Element> get allElements {
+    return _elements != null ? _elements : const <Element>[];
+  }
 
-  void forEachConstantNode(f(Node n, Constant c)) => constants.forEach(f);
+  void forEachConstantNode(f(Node n, Constant c)) {
+    if (_constants != null) {
+      _constants.forEach(f);
+    }
+  }
 
   void setAssert(Send node) {
-    asserts.add(node);
+    if (_asserts == null) {
+      _asserts = new Setlet<Send>();
+    }
+    _asserts.add(node);
   }
 
   bool isAssert(Send node) {
-    return asserts.contains(node);
+    return _asserts != null && _asserts.contains(node);
+  }
+
+  FunctionElement getFunctionDefinition(FunctionExpression node) {
+    return this[node];
+  }
+
+  ConstructorElement getRedirectingTargetConstructor(
+      RedirectingFactoryBody node) {
+    return this[node];
   }
 
   void defineTarget(Node node, JumpTarget target) {
-    if (definedTargets == null) {
-      // TODO(johnniwinther): Use [Maplet] when available.
-      definedTargets = <Node, JumpTarget>{};
+    if (_definedTargets == null) {
+      _definedTargets = new Maplet<Node, JumpTarget>();
     }
-    definedTargets[node] = target;
+    _definedTargets[node] = target;
   }
 
   void undefineTarget(Node node) {
-    if (definedTargets != null) {
-      definedTargets.remove(node);
-      if (definedTargets.isEmpty) {
-        definedTargets = null;
+    if (_definedTargets != null) {
+      _definedTargets.remove(node);
+      if (_definedTargets.isEmpty) {
+        _definedTargets = null;
       }
     }
   }
 
   JumpTarget getTargetDefinition(Node node) {
-    return definedTargets != null ? definedTargets[node] : null;
+    return _definedTargets != null ? _definedTargets[node] : null;
   }
 
   void registerTargetOf(GotoStatement node, JumpTarget target) {
-    if (usedTargets == null) {
-      // TODO(johnniwinther): Use [Maplet] when available.
-      usedTargets = <GotoStatement, JumpTarget>{};
+    if (_usedTargets == null) {
+      _usedTargets = new Maplet<GotoStatement, JumpTarget>();
     }
-    usedTargets[node] = target;
+    _usedTargets[node] = target;
   }
 
   JumpTarget getTargetOf(GotoStatement node) {
-    return usedTargets != null ? usedTargets[node] : null;
+    return _usedTargets != null ? _usedTargets[node] : null;
   }
 
   void defineLabel(Label label, LabelDefinition target) {
-    if (definedLabels == null) {
-      // TODO(johnniwinther): Use [Maplet] when available.
-      definedLabels = <Label, LabelDefinition>{};
+    if (_definedLabels == null) {
+      _definedLabels = new Maplet<Label, LabelDefinition>();
     }
-    definedLabels[label] = target;
+    _definedLabels[label] = target;
   }
 
   void undefineLabel(Label label) {
-    if (definedLabels != null) {
-      definedLabels.remove(label);
-      if (definedLabels.isEmpty) {
-        definedLabels = null;
+    if (_definedLabels != null) {
+      _definedLabels.remove(label);
+      if (_definedLabels.isEmpty) {
+        _definedLabels = null;
       }
     }
   }
 
   LabelDefinition getLabelDefinition(Label label) {
-    return definedLabels != null ? definedLabels[label] : null;
+    return _definedLabels != null ? _definedLabels[label] : null;
   }
 
   void registerTargetLabel(GotoStatement node, LabelDefinition label) {
     assert(node.target != null);
-    if (targetLabels == null) {
-      // TODO(johnniwinther): Use [Maplet] when available.
-      targetLabels = <GotoStatement, LabelDefinition>{};
+    if (_targetLabels == null) {
+      _targetLabels = new Maplet<GotoStatement, LabelDefinition>();
     }
-    targetLabels[node] = label;
+    _targetLabels[node] = label;
   }
 
   LabelDefinition getTargetLabel(GotoStatement node) {
     assert(node.target != null);
-    return targetLabels != null ? targetLabels[node] : null;
+    return _targetLabels != null ? _targetLabels[node] : null;
   }
 }
 
@@ -598,7 +679,7 @@ class ResolverTask extends CompilerTask {
 
         ResolverVisitor visitor = visitorFor(element);
         ResolutionRegistry registry = visitor.registry;
-        registry.useElement(tree, element);
+        registry.defineFunction(tree, element);
         visitor.setupFunction(tree, element);
 
         if (isConstructor && !element.isForwardingConstructor) {
@@ -657,7 +738,7 @@ class ResolverTask extends CompilerTask {
         useEnclosingScope: useEnclosingScope);
   }
 
-  TreeElements resolveField(VariableElementX element) {
+  TreeElements resolveField(FieldElementX element) {
     VariableDefinitions tree = element.parseNode(compiler);
     if(element.modifiers.isStatic && element.isTopLevel) {
       error(element.modifiers.getStatic(),
@@ -672,7 +753,6 @@ class ResolverTask extends CompilerTask {
     } else {
       element.variables.type = const DynamicType();
     }
-    registry.useElement(tree, element);
 
     Expression initializer = element.initializer;
     Modifiers modifiers = element.modifiers;
@@ -776,9 +856,8 @@ class ResolverTask extends CompilerTask {
       assert(invariant(node, treeElements != null,
           message: 'No TreeElements cached for $factory.'));
       FunctionExpression functionNode = factory.parseNode(compiler);
-      Return redirectionNode = functionNode.body;
-      InterfaceType factoryType =
-          treeElements.getType(redirectionNode.expression);
+      RedirectingFactoryBody redirectionNode = functionNode.body;
+      InterfaceType factoryType = treeElements.getType(redirectionNode);
 
       targetType = targetType.substByContext(factoryType);
       factory.effectiveTarget = target;
@@ -1029,7 +1108,7 @@ class ResolverTask extends CompilerTask {
                            ClassElement mixin) {
     // TODO(johnniwinther): Avoid the use of [TreeElements] here.
     if (resolutionTree == null) return;
-    Setlet<Node> superUses = resolutionTree.superUses;
+    Iterable<Node> superUses = resolutionTree.superUses;
     if (superUses.isEmpty) return;
     compiler.reportError(mixinApplication,
                          MessageKind.ILLEGAL_MIXIN_WITH_SUPER,
@@ -1076,8 +1155,11 @@ class ResolverTask extends CompilerTask {
           }
         }
         if (member.isField) {
-          if (!member.modifiers.isStatic &&
-              !member.modifiers.isFinal) {
+          if (member.modifiers.isConst && !member.modifiers.isStatic) {
+            compiler.reportError(
+                member, MessageKind.ILLEGAL_CONST_FIELD_MODIFIER);
+          }
+          if (!member.modifiers.isStatic && !member.modifiers.isFinal) {
             nonFinalInstanceFields.add(member);
           }
         }
@@ -1278,6 +1360,7 @@ class ResolverTask extends CompilerTask {
 
   TreeElements resolveTypedef(TypedefElementX element) {
     if (element.isResolved) return element.treeElements;
+    compiler.world.allTypedefs.add(element);
     return _resolveTypeDeclaration(element, () {
       ResolutionRegistry registry = new ResolutionRegistry(compiler, element);
       return compiler.withCurrentElement(element, () {
@@ -1323,7 +1406,7 @@ class ResolverTask extends CompilerTask {
       // and the annotated element instead. This will allow the backend to
       // retrieve the backend constant and only register metadata on the
       // elements for which it is needed. (Issue 17732).
-      registry.registerMetadataConstant(annotation.value);
+      registry.registerMetadataConstant(annotation.value, annotatedElement);
       annotation.resolutionState = STATE_DONE;
     }));
   }
@@ -1863,7 +1946,7 @@ class TypeResolver {
       AmbiguousElement ambiguous = element;
       type = reportFailureAndCreateType(
           ambiguous.messageKind, ambiguous.messageArguments);
-      ambiguous.diagnose(registry.currentElement, compiler);
+      ambiguous.diagnose(registry.mapping.analyzedElement, compiler);
     } else if (element.isErroneous) {
       ErroneousElement erroneousElement = element;
       type = reportFailureAndCreateType(
@@ -2018,20 +2101,21 @@ abstract class MappingVisitor<T> extends CommonResolverVisitor<T> {
       : typeResolver = new TypeResolver(compiler),
         super(compiler);
 
-  Element defineElement(Node node, Element element,
-                        {bool doAddToScope: true}) {
-    invariant(node, element != null);
-    registry.defineElement(node, element);
-    if (doAddToScope) {
-      Element existing = scope.add(element);
-      if (existing != element) {
-        reportDuplicateDefinition(node, element, existing);
-      }
+  /// Add [element] to the current scope and check for duplicate definitions.
+  void addToScope(Element element) {
+    Element existing = scope.add(element);
+    if (existing != element) {
+      reportDuplicateDefinition(element.name, element, existing);
     }
-    return element;
   }
 
-  void reportDuplicateDefinition(/*Node|String*/ name,
+  /// Register [node] as the definition of [element].
+  void defineLocalVariable(Node node, LocalVariableElement element) {
+    invariant(node, element != null);
+    registry.defineElement(node, element);
+  }
+
+  void reportDuplicateDefinition(String name,
                                  Spannable definition,
                                  Spannable existing) {
     compiler.reportError(definition,
@@ -2057,6 +2141,7 @@ class ResolverVisitor extends MappingVisitor<ResolutionResult> {
   bool inInstanceContext;
   bool inCheckContext;
   bool inCatchBlock;
+
   Scope scope;
   ClassElement currentClass;
   ExpressionStatement currentExpressionStatement;
@@ -2314,7 +2399,9 @@ class ResolverVisitor extends MappingVisitor<ResolutionResult> {
       if (element.isInitializingFormal) {
         registry.useElement(parameterNode, element);
       } else {
-        defineElement(parameterNode, element);
+        LocalParameterElement parameterElement = element;
+        defineLocalVariable(parameterNode, parameterElement);
+        addToScope(parameterElement);
       }
       parameterNodes = parameterNodes.tail;
     });
@@ -2392,14 +2479,26 @@ class ResolverVisitor extends MappingVisitor<ResolutionResult> {
 
   visitFunctionDeclaration(FunctionDeclaration node) {
     assert(node.function.name != null);
-    visit(node.function);
-    FunctionElement functionElement = registry.getDefinition(node.function);
-    // TODO(floitsch): this might lead to two errors complaining about
-    // shadowing.
-    defineElement(node, functionElement);
+    visitFunctionExpression(node.function, inFunctionDeclaration: true);
   }
 
-  visitFunctionExpression(FunctionExpression node) {
+
+  /// Process a local function declaration or an anonymous function expression.
+  ///
+  /// [inFunctionDeclaration] is `true` when the current node is the immediate
+  /// child of a function declaration.
+  ///
+  /// This is used to distinguish local function declarations from anonymous
+  /// function expressions.
+  visitFunctionExpression(FunctionExpression node,
+                          {bool inFunctionDeclaration: false}) {
+    bool doAddToScope = inFunctionDeclaration;
+    if (!inFunctionDeclaration && node.name != null) {
+      compiler.reportError(
+          node.name,
+          MessageKind.NAMED_FUNCTION_EXPRESSION,
+          {'name': node.name});
+    }
     visit(node.returnType);
     String name;
     if (node.name == null) {
@@ -2413,9 +2512,12 @@ class ResolverVisitor extends MappingVisitor<ResolutionResult> {
     function.functionSignatureCache =
         SignatureResolver.analyze(compiler, node.parameters, node.returnType,
             function, registry, createRealParameters: true);
+    registry.defineFunction(node, function);
+    if (doAddToScope) {
+      addToScope(function);
+    }
     Scope oldScope = scope; // The scope is modified by [setupFunction].
     setupFunction(node, function);
-    defineElement(node, function, doAddToScope: node.name != null);
 
     Element previousEnclosingElement = enclosingElement;
     enclosingElement = function;
@@ -2441,11 +2543,6 @@ class ResolverVisitor extends MappingVisitor<ResolutionResult> {
 
   ResolutionResult resolveSend(Send node) {
     Selector selector = resolveSelector(node, null);
-    if (selector != null) {
-      compiler.enqueuer.resolution.compilationInfo.registerCallSite(
-          registry.mapping, node);
-    }
-
     if (node.isSuperCall) registry.registerSuperUse(node);
 
     if (node.receiver == null) {
@@ -2545,6 +2642,13 @@ class ResolverVisitor extends MappingVisitor<ResolutionResult> {
         return new ElementResult(warnAndCreateErroneousElement(
             node, name, kind,
             {'className': receiverClass.name, 'memberName': name}));
+      } else if (isPrivateName(name) &&
+                 target.library != enclosingElement.library) {
+        registry.registerThrowNoSuchMethod();
+        return new ElementResult(warnAndCreateErroneousElement(
+            node, name, MessageKind.PRIVATE_ACCESS,
+            {'libraryName': target.library.getLibraryOrScriptName(),
+             'name': name}));
       }
     } else if (resolvedReceiver.element.isPrefix) {
       PrefixElement prefix = resolvedReceiver.element;
@@ -3013,23 +3117,19 @@ class ResolverVisitor extends MappingVisitor<ResolutionResult> {
   }
 
   visitReturn(Return node) {
-    if (node.isRedirectingFactoryBody) {
-      handleRedirectingFactoryBody(node);
-    } else {
-      Node expression = node.expression;
-      if (expression != null &&
-          enclosingElement.isGenerativeConstructor) {
-        // It is a compile-time error if a return statement of the form
-        // `return e;` appears in a generative constructor.  (Dart Language
-        // Specification 13.12.)
-        compiler.reportError(expression,
-                             MessageKind.CANNOT_RETURN_FROM_CONSTRUCTOR);
-      }
-      visit(node.expression);
+    Node expression = node.expression;
+    if (expression != null &&
+        enclosingElement.isGenerativeConstructor) {
+      // It is a compile-time error if a return statement of the form
+      // `return e;` appears in a generative constructor.  (Dart Language
+      // Specification 13.12.)
+      compiler.reportError(expression,
+                           MessageKind.CANNOT_RETURN_FROM_CONSTRUCTOR);
     }
+    visit(node.expression);
   }
 
-  void handleRedirectingFactoryBody(Return node) {
+  visitRedirectingFactoryBody(RedirectingFactoryBody node) {
     final isSymbolConstructor = enclosingElement == compiler.symbolConstructor;
     if (!enclosingElement.isFactoryConstructor) {
       compiler.reportError(
@@ -3042,7 +3142,7 @@ class ResolverVisitor extends MappingVisitor<ResolutionResult> {
     ConstructorElement redirectionTarget = resolveRedirectingFactory(
         node, inConstContext: isConstConstructor);
     constructor.immediateRedirectionTarget = redirectionTarget;
-    registry.useElement(node.expression, redirectionTarget);
+    registry.setRedirectingTargetConstructor(node, redirectionTarget);
     if (Elements.isUnresolved(redirectionTarget)) {
       registry.registerThrowNoSuchMethod();
       return;
@@ -3060,7 +3160,7 @@ class ResolverVisitor extends MappingVisitor<ResolutionResult> {
     // Check that the target constructor is type compatible with the
     // redirecting constructor.
     ClassElement targetClass = redirectionTarget.enclosingClass;
-    InterfaceType type = registry.getType(node.expression);
+    InterfaceType type = registry.getType(node);
     FunctionType targetType = redirectionTarget.computeType(compiler)
         .subst(type.typeArguments, targetClass.typeVariables);
     FunctionType constructorType = constructor.computeType(compiler);
@@ -3301,7 +3401,7 @@ class ResolverVisitor extends MappingVisitor<ResolutionResult> {
     return node.accept(new ConstructorResolver(compiler, this));
   }
 
-  ConstructorElement resolveRedirectingFactory(Return node,
+  ConstructorElement resolveRedirectingFactory(RedirectingFactoryBody node,
                                                {bool inConstContext: false}) {
     return node.accept(new ConstructorResolver(compiler, this,
                                                inConstContext: inConstContext));
@@ -3499,7 +3599,7 @@ class ResolverVisitor extends MappingVisitor<ResolutionResult> {
     }
     if (loopVariable != null) {
       // loopVariable may be null if it could not be resolved.
-      registry.defineElement(declaration, loopVariable);
+      registry.setForInVariable(node, loopVariable);
     }
     visitLoopBodyIn(node, node.body, blockScope);
   }
@@ -3935,9 +4035,7 @@ class TypedefResolverVisitor extends TypeDefinitionVisitor {
     element.functionSignature = signature;
 
     scope = new MethodScope(scope, element);
-    signature.forEachParameter((FormalElement element) {
-      defineElement(element.node, element);
-    });
+    signature.forEachParameter(addToScope);
 
     element.alias = signature.type;
 
@@ -4286,6 +4384,14 @@ class ClassResolverVisitor extends TypeDefinitionVisitor {
       if (!member.isGenerativeConstructor) return;
       FunctionElement forwarder =
           createForwardingConstructor(member, mixinApplication);
+      if (isPrivateName(member.name) &&
+          mixinApplication.library != superclass.library) {
+        // Do not create a forwarder to the super constructor, because the mixin
+        // application is in a different library than the constructor in the
+        // super class and it is not possible to call that constructor from the
+        // library using the mixin application.
+        return;
+      }
       mixinApplication.addConstructor(forwarder);
     });
     calculateAllSupertypes(mixinApplication);
@@ -4584,10 +4690,11 @@ class VariableDefinitionsVisitor extends CommonResolverVisitor<Identifier> {
   visitNodeList(NodeList node) {
     for (Link<Node> link = node.nodes; !link.isEmpty; link = link.tail) {
       Identifier name = visit(link.head);
-      VariableElement element = new LocalVariableElementX(
+      LocalVariableElement element = new LocalVariableElementX(
           name.source, resolver.enclosingElement,
           variables, name.token);
-      resolver.defineElement(link.head, element);
+      resolver.defineLocalVariable(link.head, element);
+      resolver.addToScope(element);
       if (definitions.modifiers.isConst) {
         compiler.enqueuer.resolution.addDeferredAction(element, () {
           compiler.resolver.constantCompiler.compileConstant(element);
@@ -4767,10 +4874,10 @@ class ConstructorResolver extends CommonResolverVisitor<Element> {
   }
 
   /// Assumed to be called by [resolveRedirectingFactory].
-  Element visitReturn(Return node) {
-    Node expression = node.expression;
-    return finishConstructorReference(visit(expression),
-                                      expression, expression);
+  Element visitRedirectingFactoryBody(RedirectingFactoryBody node) {
+    Node constructorReference = node.constructorReference;
+    return finishConstructorReference(visit(constructorReference),
+        constructorReference, node);
   }
 }
 

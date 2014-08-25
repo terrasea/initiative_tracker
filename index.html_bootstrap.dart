@@ -2,53 +2,43 @@ library app_bootstrap;
 
 import 'package:polymer/polymer.dart';
 
-import 'package:core_elements/core_meta.dart' as i0;
+import 'package:core_elements/core_input.dart' as i0;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_iconset.dart' as i1;
+import 'package:paper_elements/paper_input.dart' as i1;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_icon.dart' as i2;
+import 'package:core_elements/core_meta.dart' as i2;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_selection.dart' as i3;
+import 'package:core_elements/core_iconset.dart' as i3;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_selector.dart' as i4;
+import 'package:core_elements/core_icon.dart' as i4;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_menu.dart' as i5;
+import 'package:paper_elements/paper_focusable.dart' as i5;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_drag_drop.dart' as i6;
+import 'package:paper_elements/paper_ripple.dart' as i6;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:paper_elements/paper_ripple.dart' as i7;
+import 'package:paper_elements/paper_shadow.dart' as i7;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:paper_elements/paper_item.dart' as i8;
+import 'package:paper_elements/paper_button.dart' as i8;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_input.dart' as i9;
+import 'package:core_elements/core_transition.dart' as i9;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:paper_elements/paper_input.dart' as i10;
+import 'package:core_elements/core_key_helper.dart' as i10;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:paper_elements/paper_focusable.dart' as i11;
+import 'package:core_elements/core_overlay_layer.dart' as i11;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:paper_elements/paper_shadow.dart' as i12;
+import 'package:core_elements/core_overlay.dart' as i12;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:paper_elements/paper_button.dart' as i13;
+import 'package:core_elements/core_transition_css.dart' as i13;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_transition.dart' as i14;
+import 'package:core_elements/core_media_query.dart' as i14;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_key_helper.dart' as i15;
+import 'package:paper_elements/paper_toast.dart' as i15;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_overlay_layer.dart' as i16;
+import 'package:initiative_tracker/draggable_item.dart' as i16;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_overlay.dart' as i17;
+import 'package:initiative_tracker/initiative_list.dart' as i17;
 import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_transition_css.dart' as i18;
-import 'package:polymer/src/build/log_injector.dart';
-import 'package:core_elements/core_media_query.dart' as i19;
-import 'package:polymer/src/build/log_injector.dart';
-import 'package:paper_elements/paper_toast.dart' as i20;
-import 'package:polymer/src/build/log_injector.dart';
-import 'package:initiative_tracker/draggable_item.dart' as i21;
-import 'package:polymer/src/build/log_injector.dart';
-import 'package:initiative_tracker/initiative_list.dart' as i22;
-import 'package:polymer/src/build/log_injector.dart';
-import 'index.html.0.dart' as i23;
+import 'main.dart' as i18;
 import 'package:polymer/src/build/log_injector.dart';
 import 'package:smoke/smoke.dart' show Declaration, PROPERTY, METHOD;
 import 'package:smoke/static.dart' show useGeneratedCode, StaticConfiguration;
@@ -67,14 +57,11 @@ void main() {
         #blurAction: (o) => o.blurAction,
         #container: (o) => o.container,
         #contextMenuAction: (o) => o.contextMenuAction,
-        #delay: (o) => o.delay,
         #disabled: (o) => o.disabled,
         #dismiss: (o) => o.dismiss,
         #downAction: (o) => o.downAction,
-        #dragIt: (o) => o.dragIt,
-        #dragStart: (o) => o.dragStart,
-        #dragStop: (o) => o.dragStop,
         #dragged: (o) => o.dragged,
+        #dragging: (o) => o.dragging,
         #error: (o) => o.error,
         #finish: (o) => o.finish,
         #floatingLabel: (o) => o.floatingLabel,
@@ -89,7 +76,6 @@ void main() {
         #inputValue: (o) => o.inputValue,
         #invalid: (o) => o.invalid,
         #label: (o) => o.label,
-        #multi: (o) => o.multi,
         #multiline: (o) => o.multiline,
         #name: (o) => o.name,
         #narrowMode: (o) => o.narrowMode,
@@ -103,10 +89,12 @@ void main() {
         #required: (o) => o.required,
         #responsiveWidth: (o) => o.responsiveWidth,
         #rows: (o) => o.rows,
-        #selectionSelect: (o) => o.selectionSelect,
         #setInitiatives: (o) => o.setInitiatives,
         #start: (o) => o.start,
         #text: (o) => o.text,
+        #touchEnd: (o) => o.touchEnd,
+        #touchMove: (o) => o.touchMove,
+        #touchStart: (o) => o.touchStart,
         #transitionEndAction: (o) => o.transitionEndAction,
         #type: (o) => o.type,
         #upAction: (o) => o.upAction,
@@ -115,11 +103,11 @@ void main() {
       setters: {
         #container: (o, v) { o.container = v; },
         #dragged: (o, v) { o.dragged = v; },
+        #dragging: (o, v) { o.dragging = v; },
         #icon: (o, v) { o.icon = v; },
         #iconSrc: (o, v) { o.iconSrc = v; },
         #initiative: (o, v) { o.initiative = v; },
         #inputValue: (o, v) { o.inputValue = v; },
-        #multi: (o, v) { o.multi = v; },
         #name: (o, v) { o.name = v; },
         #narrowMode: (o, v) { o.narrowMode = v; },
         #newTurn: (o, v) { o.newTurn = v; },
@@ -134,6 +122,7 @@ void main() {
       },
       declarations: {
         smoke_0.DraggableItem: {
+          #dragging: const Declaration(#dragging, bool, kind: PROPERTY, annotations: const [const smoke_1.PublishedProperty(reflect: true)]),
           #icon: const Declaration(#icon, String, kind: PROPERTY, annotations: const [const smoke_1.PublishedProperty(reflect: true)]),
           #initiative: const Declaration(#initiative, int, kind: PROPERTY, annotations: const [const smoke_1.PublishedProperty(reflect: true)]),
           #name: const Declaration(#name, String, kind: PROPERTY, annotations: const [const smoke_1.PublishedProperty(reflect: true)]),
@@ -150,14 +139,11 @@ void main() {
         #blurAction: r'blurAction',
         #container: r'container',
         #contextMenuAction: r'contextMenuAction',
-        #delay: r'delay',
         #disabled: r'disabled',
         #dismiss: r'dismiss',
         #downAction: r'downAction',
-        #dragIt: r'dragIt',
-        #dragStart: r'dragStart',
-        #dragStop: r'dragStop',
         #dragged: r'dragged',
+        #dragging: r'dragging',
         #error: r'error',
         #finish: r'finish',
         #floatingLabel: r'floatingLabel',
@@ -172,7 +158,6 @@ void main() {
         #inputValue: r'inputValue',
         #invalid: r'invalid',
         #label: r'label',
-        #multi: r'multi',
         #multiline: r'multiline',
         #name: r'name',
         #narrowMode: r'narrowMode',
@@ -186,10 +171,12 @@ void main() {
         #required: r'required',
         #responsiveWidth: r'responsiveWidth',
         #rows: r'rows',
-        #selectionSelect: r'selectionSelect',
         #setInitiatives: r'setInitiatives',
         #start: r'start',
         #text: r'text',
+        #touchEnd: r'touchEnd',
+        #touchMove: r'touchMove',
+        #touchStart: r'touchStart',
         #transitionEndAction: r'transitionEndAction',
         #type: r'type',
         #upAction: r'upAction',
@@ -197,29 +184,24 @@ void main() {
       }));
   new LogInjector().injectLogsFromUrl('index.html._buildLogs');
   configureForDeployment([
-      i0.upgradeCoreMeta,
-      i1.upgradeCoreIconset,
-      i2.upgradeCoreIcon,
-      i3.upgradeCoreSelection,
-      i4.upgradeCoreSelector,
-      i5.upgradeCoreMenu,
-      i6.upgradeCoreDragDrop,
-      i7.upgradePaperRipple,
-      i8.upgradePaperItem,
-      i9.upgradeCoreInput,
-      i10.upgradePaperInput,
-      i11.upgradePaperFocusable,
-      i12.upgradePaperShadow,
-      i13.upgradePaperButton,
-      i14.upgradeCoreTransition,
-      i15.upgradeCoreKeyHelper,
-      i16.upgradeCoreOverlayLayer,
-      i17.upgradeCoreOverlay,
-      i18.upgradeCoreTransitionCss,
-      i19.upgradeCoreMediaQuery,
-      i20.upgradePaperToast,
-      () => Polymer.register('draggable-item', i21.DraggableItem),
-      () => Polymer.register('initiative-list', i22.InitiativeList),
+      i0.upgradeCoreInput,
+      i1.upgradePaperInput,
+      i2.upgradeCoreMeta,
+      i3.upgradeCoreIconset,
+      i4.upgradeCoreIcon,
+      i5.upgradePaperFocusable,
+      i6.upgradePaperRipple,
+      i7.upgradePaperShadow,
+      i8.upgradePaperButton,
+      i9.upgradeCoreTransition,
+      i10.upgradeCoreKeyHelper,
+      i11.upgradeCoreOverlayLayer,
+      i12.upgradeCoreOverlay,
+      i13.upgradeCoreTransitionCss,
+      i14.upgradeCoreMediaQuery,
+      i15.upgradePaperToast,
+      () => Polymer.register('draggable-item', i16.DraggableItem),
+      () => Polymer.register('initiative-list', i17.InitiativeList),
     ]);
-  i23.main();
+  i18.main();
 }
